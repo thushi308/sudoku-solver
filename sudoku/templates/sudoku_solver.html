@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku Solver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1c1f24;
+    --panel: #22262c;
+    --line-thin: #3a3f47;
+    --line-thick: #c8cdd4;
+    --paper: #e9e6dd;
+    --given: #e9e6dd;
+    --solved: #d9a15c;
+    --error: #c9705f;
+    --muted: #8b9099;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+    font-family:'JetBrains Mono', monospace;
+    color:var(--paper);
+  }
+  .wrap{
+    width:100%;
+    max-width:480px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:2rem;
+    letter-spacing:-0.01em;
+    margin:0 0 4px;
+    color:var(--paper);
+  }
+  .sub{
+    color:var(--muted);
+    font-size:0.85rem;
+    margin:0 0 28px;
+    line-height:1.5;
+  }
+  .board{
+    display:grid;
+    grid-template-columns:repeat(9, 1fr);
+    background:var(--line-thick);
+    border:3px solid var(--line-thick);
+    gap:1px;
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .cell{
+    aspect-ratio:1;
+    width:100%;
+    background:var(--panel);
+    border:none;
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size:clamp(16px, 3.6vw, 22px);
+    font-weight:500;
+    color:var(--given);
+    caret-color:var(--solved);
+  }
+  .cell:focus{
+    outline:none;
+    background:#2c3138;
+  }
+  .cell.solved{
+    color:var(--solved);
+  }
+  .cell.r3{ border-right:2px solid var(--line-thick); }
+  .cell.c3{ border-bottom:2px solid var(--line-thick); }
+  .cell::-webkit-outer-spin-button,
+  .cell::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+
+  .controls{
+    display:flex;
+    gap:10px;
+    margin-top:22px;
+  }
+  button{
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.9rem;
+    font-weight:500;
+    padding:12px 18px;
+    border-radius:4px;
+    border:1px solid transparent;
+    cursor:pointer;
+    transition:opacity 0.15s ease;
+  }
+  button:active{opacity:0.75;}
+  #solveBtn{
+    flex:1;
+    background:var(--solved);
+    color:#1c1f24;
+  }
+  #solveBtn:disabled{
+    background:#5a5040;
+    color:#9a9385;
+    cursor:progress;
+  }
+  #clearBtn{
+    background:transparent;
+    border-color:var(--line-thin);
+    color:var(--muted);
+  }
+  .status{
+    margin-top:16px;
+    font-size:0.82rem;
+    min-height:1.2em;
+    color:var(--muted);
+  }
+  .status.error{ color:var(--error); }
+  .status.ok{ color:var(--solved); }
+  .status .time{ color:var(--paper); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sudoku Solver</h1>
+  <p class="sub">Type the puzzle into the grid, leave empty cells blank, then solve. Solved digits appear in amber.</p>
+
+  <div class="board" id="board"></div>
+
+  <div class="controls">
+    <button id="solveBtn">Solve</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const API_BASE = "";
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const solveBtn = document.getElementById('solveBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+const cells = [];
+
+for (let i = 0; i < 81; i++) {
+  const row = Math.floor(i / 9);
+  const col = i % 9;
+  const input = document.createElement('input');
+  input.className = 'cell';
+  input.inputMode = 'numeric';
+  input.maxLength = 1;
+  input.dataset.index = i;
+  if (col === 2 || col === 5) input.classList.add('r3');
+  if (row === 2 || row === 5) input.classList.add('c3');
+
+  input.addEventListener('input', (e) => {
+    const v = e.target.value.replace(/[^1-9]/g, '');
+    e.target.value = v.slice(-1);
+    e.target.classList.remove('solved');
+    if (v) focusCell(i + 1);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') focusCell(i + 1);
+    if (e.key === 'ArrowLeft') focusCell(i - 1);
+    if (e.key === 'ArrowDown') focusCell(i + 9);
+    if (e.key === 'ArrowUp') focusCell(i - 9);
+    if (e.key === 'Backspace' && !e.target.value) focusCell(i - 1);
+  });
+
+  boardEl.appendChild(input);
+  cells.push(input);
+}
+
+function focusCell(i) {
+  if (i >= 0 && i < 81) cells[i].focus();
+}
+
+function readBoard() {
+  return cells.map(c => (c.value ? parseInt(c.value, 10) : 0));
+}
+
+function setStatus(msg, kind) {
+  statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  statusEl.textContent = msg;
+}
+
+async function solve() {
+  const board = readBoard();
+  if (board.every(v => v === 0)) {
+    setStatus('Enter at least a few digits before solving.', 'error');
+    return;
+  }
+
+  solveBtn.disabled = true;
+  setStatus('Solving…');
+
+  try {
+    const url = `${API_BASE}?board=${JSON.stringify(board)}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    const solved = data.solved_board_list;
+
+    solved.forEach((val, i) => {
+      const wasEmpty = board[i] === 0;
+      cells[i].value = val ? String(val) : '';
+      cells[i].classList.toggle('solved', wasEmpty);
+    });
+
+    const timeStr = typeof data.time === 'number' ? data.time.toFixed(3) + 's' : data.time;
+    setStatus(`Solved in ${timeStr}`, 'ok');
+  } catch (err) {
+    setStatus(`Couldn't solve: ${err.message}`, 'error');
+  } finally {
+    solveBtn.disabled = false;
+  }
+}
+
+function clearBoard() {
+  cells.forEach(c => {
+    c.value = '';
+    c.classList.remove('solved');
+  });
+  setStatus('');
+  cells[0].focus();
+}
+
+solveBtn.addEventListener('click', solve);
+clearBtn.addEventListener('click', clearBoard);
+</script>
+</body>
+</html>

@@ -1,14 +1,22 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 import json
 import time
-# Create your views here.
+
+def index(request):
+    if request.method == 'GET' and request.GET.get('board'):
+        return solve(request)
+    return render(request, 'sudoku_solver.html')
 
 def solve(request):
     start = time.time()
     if request.method == 'GET':
         if request.GET.get('board'):
-            board = json.loads(request.GET.get('board'))
+            try:
+                board = json.loads(request.GET.get('board'))
+            except Exception:
+                return HttpResponse("Invalid board format", status=400, content_type="text/plain")
+            
             note = {}
             for i in range(1, 10):
                 note[i] = []
@@ -32,8 +40,8 @@ def solve(request):
                             numbers_in_column.append(board_list[column])
                         if board[block] != 0:
                             numbers_in_block.append(board_list[block])
-                    if len(numbers_in_row) != len(set(numbers_in_row)) or len(numbers_in_column) != len(set(numbers_in_column)) or len(numbers_in_block) != len(set(numbers_in_block)):# or len(numbers_in_row) == 0 or len(numbers_in_column) == 0 or len(numbers_in_block) == 0:
-                        return HttpResponse("Invalid board", content_type="text/plain")
+                    if len(numbers_in_row) != len(set(numbers_in_row)) or len(numbers_in_column) != len(set(numbers_in_column)) or len(numbers_in_block) != len(set(numbers_in_block)):
+                        return HttpResponse("Invalid board", status=400, content_type="text/plain")
                     possible_numbers = list(set(possible_numbers) - set(numbers_in_row) - set(numbers_in_column) - set(numbers_in_block))
                     for j in possible_numbers:
                         note[j].append(i)
@@ -106,7 +114,7 @@ def solve(request):
                         printable_solved_board += "-"
                     printable_solved_board += " | \n"
             content = {"solved_board_list": solved_board, "printable_solved_board": printable_solved_board, "time": elapsed}
-            return HttpResponse(json.dumps(content), content_type="text/json")
+            return JsonResponse(content)
         else:
             return HttpResponse("No board provided", status=400, reason='board not provided')
     else:
